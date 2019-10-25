@@ -111,6 +111,8 @@ ODI suggests maybe two clusters in the data. I would guess the very large states
 
 However compared to the iris ODI, the presence of clusterability is much less clear
 
+
+\pagebreak
 # 5. Fit a k-means algorithm to these data and present the results. 
 
 **Give a quick, high level summary of the output and general patterns. Initialize the algorithm at k=2, and then check this assumption in the validation questions below.**
@@ -152,7 +154,7 @@ make_plot_list_w_clusters <- function(clean_df, state_names, clusters, factor = 
   
     plots[[i]] <- clean_df %>%
       ggplot(aes_string(x = x, y = y)) +
-      geom_label(aes(label = state_name, color = cluster)) +
+      geom_label(aes(label = state_name, color = cluster), size = 2) +
       labs(title = title) + 
       theme(legend.position = "none")
   }
@@ -217,7 +219,7 @@ kmeans_valid
 For K-means, look like Dunn index is maximized, the average silhouette is maximized, and connectivity minimized at 2- clear that k  =2 is ideal. The total within sum of squares drops dramatically from 1 to 2 clusters so it kind of looks like the elbow is present at 2.
 
 
-
+\pagebreak
 # 6. Fit a Gaussian mixture model via the EM algorithm to these data and present the results. 
 
 **Give a quick, high level summary of the output and general patterns. Initialize the algorithm at k=2, and then check this assumption in the validation questions below.**
@@ -314,9 +316,9 @@ valid_GMM_results <- valid_GMM(2)
 valid_GMM_results
 ```
 
-I got a connectivity value of `r round(valid_GMM_results[1], digits = 1)` and an average silhouette of `r round(valid_GMM_results[2], digits = 1)`. These values suggest my GMM has slighlty worse internal validity than K-means.
+I got a connectivity value of `r round(valid_GMM_results[1], digits = 1)` and an average silhouette of `r round(valid_GMM_results[2], digits = 1)`. These values suggest my GMM has worse internal validity than K-means.
 
-
+\pagebreak
 # 7. Fit one additional partitioning technique of your choice
 
 ## DBSCAN
@@ -353,28 +355,30 @@ for (e in eps_list) {
 }
 ```
 
+\pagebreak
 ## epsilon = 0.25
 ```{r dbscan_result}
 db_plots[[1]]
 ```
 
+\pagebreak
 ## epsilon = 0.5
 ```{r}
 db_plots[[2]]
 ```
 
-
+\pagebreak
 ## epsilon = 0.75
 ```{r}
 db_plots[[3]]
 ```
 
-
+\pagebreak
 ## epsilon = 1
 ```{r}
 db_plots[[4]]
 ```
-
+\pagebreak
 ## epsilon = 1.25
 ```{r}
 db_plots[[5]]
@@ -415,6 +419,7 @@ valid_DBscan(db_fits[[4]])
 
 Even if we treat the noise points as a cluster, DBSCAN has lower connectivity and higher average silhouette than either kmeans or GMM, implying this has the method has the best internal validity.
 
+\pagebreak
 # 9. Select a single validation strategy (e.g., compactness via min(WSS), average silhouette width, etc.), and calculate for all three algorithms.
 
 As documented thoughout above, I used connectivity and average silhouette width to compare approaches. These measures both indicated that DBSCAN outperformed kmeans (which both beat GMM).
