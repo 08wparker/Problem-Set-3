@@ -1,7 +1,12 @@
 ---
 title: "Problem Set 3"
-author: William Parker
-output: html_notebook
+author: "William Parker"
+output:
+  pdf_document:
+    toc: yes
+  html_notebook:
+    toc: yes
+    toc_float: yes
 ---
 
 
@@ -10,8 +15,7 @@ library(tidyverse)
 library(mixtools)
 ```
 
-
-**1. Load the state legislative professionalism data from the folder**
+# 1. Load the state legislative professionalism data from the folder
 ```{r}
 load("State Leg Prof Data & Codebook/legprof-components.v1.0.RData")
 
@@ -94,7 +98,7 @@ plot_list <- make_plot_list(clean_df)
 
 cowplot::plot_grid(plotlist = plot_list)
 ```
-Total session length and length of regular sessions and very correlated, not suprisingly. There aren't as many clear linear relationships between the other variables, nor obvious clusters in any of the scatter plots.
+Total session length and length of regular sessions and very correlated, not suprisingly. There aren't as many clear linear relationships between the other variables, nor obvious clusters in any of the scatter plots aside from a group of states with values slightly below the mean in all variables.
 
 # 4. Diagnose clusterability in any way you’d prefer (e.g., sparse sampling, ODI, etc.); display the results and discuss the likelihood that natural, non-random structure exist in these data.
 
@@ -107,7 +111,9 @@ ODI suggests maybe two clusters in the data. I would guess the very large states
 
 However compared to the iris ODI, the presence of clusterability is much less clear
 
-# 5. Fit a k-means algorithm to these data and present the results. Give a quick, high level summary of the output and general patterns. Initialize the algorithm at k=2, and then check this assumption in the validation questions below.
+# 5. Fit a k-means algorithm to these data and present the results. 
+
+**Give a quick, high level summary of the output and general patterns. Initialize the algorithm at k=2, and then check this assumption in the validation questions below.**
 
 ```{r kmeans}
 k_2_cluster <- kmeans(clean_df, centers = 2)
@@ -230,11 +236,9 @@ gmm_k2 <- mvnormalmixEM(data.matrix(clean_df %>% select(-t_slength)),
 
 ### GMM fitted means
 ```{r fit_means}
-
 tibble( variable = names(clean_df %>% select(-t_slength)),
   mean_1 = gmm_k2$mu[[1]],
        mean_2 = gmm_k2$mu[[2]])
-
 ```
 Inspecting the fitted means of the distribution, looks like GMM is identifying a distribution of states with "big" numbers on session length, salary and expenditures and another distribution with low numbers. Similar result to K-means
 
@@ -286,11 +290,8 @@ compare_groups %>%
 Looks like the result of the kmeans and GMM are the same except for Michigan. Comparing the plots, this probably has to do with removing `t_slength` as a feature from the GMM, which Michigan had a high value for.
 
 
+For internal validity I selected connectivity and the average silhouette to compare kmeans to GMM.
 ```{r valid_GMM}
-# wss <- function(k){
-#   kmeans(clean_df, k)$tot.withinss
-# }
-
 
 valid_GMM <- function(k){
   
@@ -299,18 +300,13 @@ valid_GMM <- function(k){
   fit <- mvnormalmixEM(data, k = k) 
   
   gmm_clust <- round(fit$posterior[,1])
-  
-  dunn_k <- dunn(Data = data, clusters = gmm_clust)
-  
-  if (dunn_k == Inf){
-    dunn_k <- NA
-  }
+
   
   conn_k <- connectivity(Data = data, clusters = gmm_clust)
   
   avg_sil <- ifelse(k ==1, NA, mean(cluster::silhouette(gmm_clust, dist = dist(data))[,3]))
   
- return(c(dunn_k, conn_k, avg_sil))
+ return(c(conn_k, avg_sil))
 }
 
 valid_GMM_results <- valid_GMM(2)
@@ -318,35 +314,33 @@ valid_GMM_results <- valid_GMM(2)
 valid_GMM_results
 ```
 
-I was unable to calculate the Dunn index, got a connectivity value of `r round(valid_GMM_results[2], digits = 1)` and an average silhouette of `r round(valid_GMM_results[3], digits = 1)`. These values suggest my GMM has slighlty worse internal validity than K-means.
+I got a connectivity value of `r round(valid_GMM_results[1], digits = 1)` and an average silhouette of `r round(valid_GMM_results[2], digits = 1)`. These values suggest my GMM has slighlty worse internal validity than K-means.
 
 
 # 7. Fit one additional partitioning technique of your choice
 
-I choose to fit **DBSCAN**. Here the key paramater is epislon, the neighborhood size
-
 ## DBSCAN
-```{r plot_results}
-db_fit <- dbscan::dbscan(data.matrix(clean_df), eps = 0.5)
-
-db_fit
-
-make_plot_list_w_clusters(clean_df, state_names, db_fit$cluster)
-```
+I choose to fit **DBSCAN**. Here the key paramater is epislon, the neighborhood size. I read that you can guess epislon by plotting the nearest neighbor distances and finding the inflection point
 
 ```{r ideal_eps}
 dist_plot <- dist(clean_df)
 
-tibble(dist = dist_plot) %>%
-  arrange(dist) %>%
-  mutate( n = row_number()) %>%
-  ggplot(aes(x = n, y = dist)) +
-  geom_line()
-```
+nn_dist <- apply(data.matrix(dist_plot), 1, FUN = function(x) {min(x[x > 0])})
+ 
+states_w_nn <- tibble(nn_dist = as.numeric(nn_dist),
+       state = state_names$stateabv) %>%
+  arrange(nn_dist) %>%
+  mutate( n = row_number())
 
+ggplot(data = states_w_nn, aes(x = n, y = nn_dist)) +
+  geom_point() + 
+  geom_label_repel(data = states_w_nn %>% filter(nn_dist > 0.5), aes(label = state)) + 
+  labs(x = "state index", y = "nearest neighboor distance")
+```
+From this plot looks like epsilon 0.5 or epsilon of 1 are reasonable choices
 
 ```{r vary_eps}
-eps_list <- seq(0.25, 1, 0.25)
+eps_list <- seq(0.25, 1.25, 0.25)
 db_fits <- vector(mode = "list", length = length(eps_list))
 db_plots <- vector(mode = "list", length = length(eps_list))
 i <- 1
@@ -381,10 +375,15 @@ db_plots[[3]]
 db_plots[[4]]
 ```
 
-I choose epsilon = 1, under this parametrization DBCSAN has identified one main cluster of states and then a group of "noise" states. Given the high variance in the corresponding component of the GMM, I think it makes sense to consider the outlier states as "noise" rather than a distinct cluster.
+## epsilon = 1.25
+```{r}
+db_plots[[5]]
+```
 
 
-Therefore when validtating the DBSCAN, I should just look at the compactness of the one cluster and throw out the noise points
+I choose epsilon = 1, under this parametrization DBCSAN has identified one main cluster of states and then a group of "noise" states that is visually appealing. Given the high variance in the corresponding component of the GMM, I think it makes sense to consider the outlier states as "noise" rather than a distinct cluster.
+
+Therefore when validtating the DBSCAN, if could be argued that should just apply the measurees of validity to the one cluster and throw out the noise points. However to compare apples to apples, I'll treat the noise as a cluster.
 
 ```{r valid_DBSCAN}
 
@@ -403,24 +402,35 @@ valid_DBscan <- function(fit){
   
   data <- data.matrix(data)
 
-  dunn_k <- dunn(Data = data, clusters = clusters)
-  
-  if (dunn_k == Inf){
-    dunn_k <- NA
-  }
-
   conn_k <- connectivity(Data = data, clusters = clusters)
   
   avg_sil <-mean(cluster::silhouette(clusters, dist = dist_matrix)[,3])
   
- return(c(dunn_k, conn_k, avg_sil))
+ return(c(conn_k, avg_sil))
 }
 
 valid_DBscan(db_fits[[4]])
 
 ```
 
-Considering the noise points as a cluster, DBSCAN has lower connectivity and higher average silhouette than either kmeans or GMM, implying this has the best internal validity.
+Even if we treat the noise points as a cluster, DBSCAN has lower connectivity and higher average silhouette than either kmeans or GMM, implying this has the method has the best internal validity.
 
+# 9. Select a single validation strategy (e.g., compactness via min(WSS), average silhouette width, etc.), and calculate for all three algorithms.
 
+As documented thoughout above, I used connectivity and average silhouette width to compare approaches. These measures both indicated that DBSCAN outperformed kmeans (which both beat GMM).
 
+# 10. Discuss the validation output.
+
+## a. What can you take away from the fit?
+ 
+Thinking about the results of all 3 approaches as a whole, I believe the results suggest that most state legislatures operate in similar fashion (expenditures, session length, salary) but there are 5-8 "outlier" states with large deviations in one or more variables. the outlier states aren't really that similar across the variables.
+
+## b. Which approach is optimal? And optimal at what value of k?
+
+The DBSCAN apporach was optimmal, as it was well deisgned for this scenario where we had one big cluster of tightly grouped states in the feature space and then several noise outlier states (that were scattered about). The internal validation measures I chose confirm this.
+
+## c. What are reasons you could imagine selecting a technically “sub-optimal” partitioning method, regardless of the validation statistics?
+
+I think DBSCAN would be the right approach here in a cluster vs. outlier scenario even if the "noise" cluster made the clustering less compact overall by the internal validation statistics. In fact, I think one could argue that only the DBSCAN identified clusters should be evaluated, as the algorithim sets noise points aside as outside the main data generating process.
+
+Conversely, in a scenario where noise/outliers don't make sense (or I really wanted to definitively cluster all the data points) I would not choose DBSCAN even if the internal validation results were better. 
